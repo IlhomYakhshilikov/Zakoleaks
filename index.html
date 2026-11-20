@@ -85,7 +85,7 @@ async function gen(){
 }
 $("#gbtn").onclick=gen;$("#term").onkeydown=e=>{if(e.key==="Enter")gen()};
 
-function setTab(t){tab=t;open=null;render()}
+function openArt(id){open=id;render()}
 function render(){
   $("#tabs").innerHTML=[["art","Maqolalar"],["year","Yillar"],["date","Sanalar"],["quiz","Test"]]
     .map(([k,l])=>`<button class="${tab===k?"on":""}" onclick="setTab('${k}')">${l}</button>`).join("");
@@ -101,13 +101,13 @@ function list(){
     db.cats.map(c=>`<span class="chip ${cat===c?"on":""}" onclick="cat='${esc(c)}';render()">${esc(c)} (${cnt(c)})</span>`).join("")+
     `<span class="chip" onclick="addCat()">+ toifa</span></div>`;
   const shown=arts.filter(i=>cat==="all"||i.cat===cat);
-  return chips+(shown.map(i=>`<button class="item" onclick="open='${i.id}';render()"><b>${esc(i.title)}</b><small>${esc(i.cat)}</small></button>`).join("")||`<div class="empty">Bu toifada hali maqola yo'q. Yuqoridan atama yozing.</div>`);
+  return chips+(shown.map(i=>`<button class="item" onclick="openArt('${i.id}')"><b>${esc(i.title)}</b><small>${esc(i.cat)}</small></button>`).join("")||`<div class="empty">Bu toifada hali maqola yo'q. Yuqoridan atama yozing.</div>`);
 }
 function addCat(){const n=prompt("Yangi toifa nomi");if(n&&n.trim()&&!db.cats.includes(n.trim())){db.cats.push(n.trim());persist();render()}}
 function srcs(i){return i.sources?.length?`<div class="src"><b>Manbalar</b><ul>${i.sources.map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title||s.url)}</a></li>`).join("")}</ul><small>Havolalarni ishlatishdan oldin o'zingiz tekshirib oling.</small></div>`:""}
 function reader(){
   const i=db.items.find(x=>x.id===open);if(!i)return list();
-  return `<div class="art"><button class="ghost" onclick="open=null;render()">← Ro'yxatga qaytish</button>
+  return `<div class="art"><button class="ghost" onclick="openArt(null)">← Ro'yxatga qaytish</button>
   <select onchange="chCat('${i.id}',this.value)">${db.cats.map(c=>`<option ${c===i.cat?"selected":""}>${esc(c)}</option>`).join("")}</select>
   <h2>${esc(i.title)}</h2>
   ${i.img?`<img src="${esc(i.img)}" alt="${esc(i.title)}"><div class="cap">Rasm: Wikipedia</div>`:""}
