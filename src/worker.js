@@ -30,12 +30,37 @@ async function wiki(term) {
 
 const SYS = `Sen "Zakovat" intellektual o'yini uchun ma'lumotnoma muharririsan. Faqat o'zbek tilida (lotin yozuvi) yoz. Berilgan Wikipedia matniga tayan va undan tashqari faqat aniq bilgan faktlaringni qo'sh. Yil, sana va sonlarni o'ylab topma; ishonching komil bo'lmasa, yozma. Javob faqat bitta JSON obyekt bo'lsin.`;
 
+function who(request, env) {
+  const k = request.headers.get("x-key");
+  if (k && k === env.ACCESS_KEY) return 1;
+  if (k && env.ACCESS_KEY_2 && k === env.ACCESS_KEY_2) return 2;
+  return 0;
+}
+
+async function readDb(env, slot) {
+  let d = await env.DB.get("db:" + slot, "json");
+  if (!d && slot === 1) d = await env.DB.get("db", "json");
+  return d || { items: [], cats: [] };
+}
+
 async function handle({ request, env }) {
-  if (env.ACCESS_KEY && request.headers.get("x-key") !== env.ACCESS_KEY) return J({ error: "Kirish kaliti noto'g'ri" }, 401);
+  const me = who(request, env);
+  if (!me) return J({ error: "Kirish kaliti noto'g'ri" }, 401);
+  env = { ...env, GEMINI_API_KEY: me === 2 ? env.GEMINI_API_KEY_2 : env.GEMINI_API_KEY };
   const b = await request.json();
   try {
-    if (b.action === "load") return J((await env.DB.get("db", "json")) || { items: [], cats: DEFAULT_CATS });
-    if (b.action === "save") { await env.DB.put("db", JSON.stringify(b.db)); return J({ ok: 1 }); }
+    if (b.action === "load") {
+      const [a, c] = await Promise.all([readDb(env, 1), readDb(env, 2)]);
+      const tag = (d, n) => (d.items || []).map(i => ({ ...i, by: n }));
+      const items = [...tag(a, 1), ...tag(c, 2)].sort((x, y) => (y.id > x.id ? 1 : -1));
+      const cats = [...new Set([...DEFAULT_CATS, ...(a.cats || []), ...(c.cats || [])])];
+      return J({ items, cats, me, names: { 1: env.NAME_1 || "1-foydalanuvchi", 2: env.NAME_2 || "2-foydalanuvchi" } });
+    }
+    if (b.action === "save") {
+      const items = (b.db.items || []).filter(i => i.by === me).map(({ by, ...i }) => i);
+      await env.DB.put("db:" + me, JSON.stringify({ items, cats: b.db.cats || [] }));
+      return J({ ok: 1 });
+    }
 
     if (b.action === "generate") {
       const cats = b.cats?.length ? b.cats : DEFAULT_CATS;
@@ -44,7 +69,7 @@ async function handle({ request, env }) {
       const schema = {
         article: `{"title":"o'zbekcha sarlavha","cat":"mana shu toifalardan aynan biri: ${cats.join(", ")}","body":"250-350 so'z, 3-4 abzats, abzatslar \\n\\n bilan ajratilgan; asosiy ma'no, sabab-oqibat va yillar bilan"}`,
         year: `{"title":"<yil>-yil","events":["kamida 20 ta (20 dan 25 gacha) eng muhim va katta voqea, har biri 1 jumla, oy va joy bilan, xronologik tartibda"],"sort":<yil raqami>}`,
-        date: `{"title":"<kun>-<oy nomi o'zbekcha>","events":["6-8 ta qisqa voqea, har biri yilidan boshlansin: '1969: ...'"],"sort":<oy*100+kun>}`
+        date: `{"title":"<kun>-<oy nomi o'zbekcha>","events":["kamida 20 ta (20 dan 25 gacha) eng muhim va katta voqea, har biri 1 jumla va yilidan boshlansin: '1969: ...', yillar bo'yicha tartiblangan"],"sort":<oy*100+kun>}`
       }[b.type];
       const out = await gemini(env, SYS, `Mavzu: ${b.term}\nTuri: ${b.type}\nJSON shakli: ${schema}\n\nWikipedia matni (${w?.title || "topilmadi"}):\n${w?.text || "(yo'q)"}`);
       if (b.type === "article") {
@@ -55,20 +80,6 @@ async function handle({ request, env }) {
         ...(w ? [{ title: "Wikipedia: " + w.title, url: w.url }] : []),
         { title: "Britannica (qidiruv): " + (tr.en || b.term), url: "https://www.britannica.com/search?query=" + encodeURIComponent(tr.en || b.term) }
       ];
-      return J(out);
-    }
-
-    if (b.action === "questions") {
-      const out = await gemini(env,
-        "Sen Zakovat (Nima? Qayerda? Qachon?) savollarini o'zbekchaga tarjima qiluvchi va tahlil qiluvchi muharrirsan. Faqat JSON qaytar. Faqat berilgan savollarga tayan, hech narsa o'ylab topma.",
-        `Atama: ${b.term}\n\nQuyida boshqa tilda nusxalangan matn bor. Atamaga eng aloqador savollardan ko'pi bilan 7 tasini tanla va o'zbekchaga (lotin) tarjima qil, javobni ham. Izoh bo'lsa "c" ga yoz. Keyin savollarga qarab 2-4 jumlada xulosa yoz: zakovatda bu atama odatda qanday mantiq yoki savol turlari bilan ishlatiladi. Xulosani faqat savollardan chiqar. JSON: {"analysis":"","questions":[{"q":"","a":"","c":""}]}\n\nOldingi savollar:\n${b.old || "(yo'q)"}\n\nYangi matn:\n${String(b.raw).slice(0, 15000)}`);
-      return J(out);
-    }
-
-    if (b.action === "samples") {
-      const out = await gemini(env,
-        "Sen Zakovat uslubidagi savollar yozuvchi muharrirsan. O'zbek tilida (lotin) yoz. Faqat JSON qaytar.",
-        `Atama: ${b.term}\n\nMaqola:\n${b.body}\n\nVazifa: "analysis": 2-4 jumla, zakovatda bu atama odatda qanday mantiq va savol turlari bilan ishlatilishi (umumiy tahlil, ishonching komil bo'lmasa "ehtimol" de). "questions": 6-7 ta original namuna savol, javobi aniq, javobning o'zini savolda yozma, faqat maqoladagi faktlarga tayan; har biriga "a" va "c". JSON: {"analysis":"","questions":[{"q":"","a":"","c":""}]}`);
       return J(out);
     }
 
@@ -84,6 +95,7 @@ async function handle({ request, env }) {
     return J({ error: "Noma'lum amal" }, 400);
   } catch (e) { return J({ error: e.message }, 500); }
 }
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
