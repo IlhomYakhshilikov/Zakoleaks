@@ -1,0 +1,7 @@
+{
+  "name": "zakoleaks",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api"] },
+  "kv_namespaces": [{ "binding": "DB", "id": "8862a24333c04daaa5dbd05e5619ae53" }]
+}
