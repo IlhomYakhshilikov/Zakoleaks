@@ -9,7 +9,7 @@ async function gemini(env, system, user) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts: [{ text: user }] }],
-      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 4000, temperature: 0.3 }
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0.3 }
     })
   });
   const d = await r.json();
@@ -21,7 +21,7 @@ async function gemini(env, system, user) {
 async function wiki(term) {
   try {
     const u = "https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=1&gsrsearch=" + encodeURIComponent(term) +
-      "&prop=extracts|info&explaintext=1&exchars=7000&inprop=url&format=json";
+      "&prop=extracts|info&explaintext=1&exchars=15000&inprop=url&format=json";
     const d = await (await fetch(u, { headers: { "user-agent": "zakovat-baza/1.0" } })).json();
     const p = Object.values(d.query?.pages || {})[0];
     return p ? { title: p.title, url: p.fullurl, text: p.extract } : null;
@@ -43,7 +43,7 @@ async function handle({ request, env }) {
       const w = await wiki(tr.en || b.term);
       const schema = {
         article: `{"title":"o'zbekcha sarlavha","cat":"mana shu toifalardan aynan biri: ${cats.join(", ")}","body":"250-350 so'z, 3-4 abzats, abzatslar \\n\\n bilan ajratilgan; asosiy ma'no, sabab-oqibat va yillar bilan"}`,
-        year: `{"title":"<yil>-yil","events":["6-8 ta qisqa voqea, har biri 1-2 jumla, oy va joy bilan"],"sort":<yil raqami>}`,
+        year: `{"title":"<yil>-yil","events":["kamida 20 ta (20 dan 25 gacha) eng muhim va katta voqea, har biri 1 jumla, oy va joy bilan, xronologik tartibda"],"sort":<yil raqami>}`,
         date: `{"title":"<kun>-<oy nomi o'zbekcha>","events":["6-8 ta qisqa voqea, har biri yilidan boshlansin: '1969: ...'"],"sort":<oy*100+kun>}`
       }[b.type];
       const out = await gemini(env, SYS, `Mavzu: ${b.term}\nTuri: ${b.type}\nJSON shakli: ${schema}\n\nWikipedia matni (${w?.title || "topilmadi"}):\n${w?.text || "(yo'q)"}`);
