@@ -60,7 +60,7 @@ let db={items:[],cats:[]},tab="art",cat="all",open=null,busy=false,qz=null;
 
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",5000)}
 async function api(action,data={}){
-  const r=await fetch("/.netlify/functions/api",{method:"POST",headers:{"x-key":localStorage.getItem("zk")||""},body:JSON.stringify({action,...data})});
+  const r=await fetch("/api",{method:"POST",headers:{"x-key":localStorage.getItem("zk")||""},body:JSON.stringify({action,...data})});
   const d=await r.json().catch(()=>({error:"Server javob bermadi (vaqt tugagan bo'lishi mumkin)"}));
   if(r.status===401){const k=prompt("Kirish kalitini kiriting");if(k!==null){localStorage.setItem("zk",k);return api(action,data)}}
   if(!r.ok)throw new Error(d.error||"Xatolik");
