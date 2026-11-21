@@ -77,7 +77,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let db={items:[],cats:[]},tab="art",cat="all",cur=null,busy=false,qz=null,catsOpen=true;
+let db={items:[],cats:[]},tab="art",cat="all",cur=null,busy=false,qz=null,catsOpen=true,qmode=null;
 
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",6000)}
 function closeSb(){document.body.classList.remove("sb")}
@@ -109,7 +109,7 @@ async function gen(){
 
 function go(t){
   if(t==="art")catsOpen=!(tab==="art"&&catsOpen&&cat==="all"&&!cur);
-  tab=t;cat="all";cur=null;if(t!=="art")closeSb();render();
+  tab=t;cat="all";cur=null;if(t==="quiz"){qmode=null;qz=null}if(t!=="art"&&t!=="quiz")closeSb();render();
 }
 function setCat(c){tab="art";cat=c;cur=null;closeSb();render()}
 function openItem(id){cur=id;render()}
@@ -123,7 +123,7 @@ function navHtml(){
   const nv=(t,l,c)=>`<button class="nv ${tab===t?"on":""}" onclick="go('${t}')">${l}${c===undefined?"":`<span>${c}</span>`}</button>`;
   const rows=[["all","Barchasi",arts.length],...db.cats.map(c=>[c,c,arts.filter(i=>i.cat===c).length])];
   const sub=tab==="art"&&catsOpen?`<div class="sub">${rows.map(([k,l,c])=>`<button class="sb ${cat===k?"on":""}" data-c="${esc(k)}" onclick="setCat(this.dataset.c)">${esc(l)}<span>${c}</span></button>`).join("")}<button class="sb add" onclick="addCat()">+ toifa qo'shish</button></div>`:"";
-  return nv("art","Maqolalar",arts.length)+sub+nv("year","Yillar",n("year"))+nv("date","Sanalar",n("date"))+nv("quiz","Test");
+  const qs=tab==="quiz"?`<div class="sub">${[["article","Maqolalar bo'yicha"],["year","Yillar bo'yicha"],["date","Sanalar bo'yicha"]].map(([k,l])=>`<button class="sb ${qmode===k?"on":""}" onclick="setQ('${k}')">${l}<span>${n(k)}</span></button>`).join("")}</div>`:"";return nv("art","Maqolalar",arts.length)+sub+nv("year","Yillar",n("year"))+nv("date","Sanalar",n("date"))+nv("quiz","Test")+qs;
 }
 function viewHtml(){
   if(tab==="quiz")return quizView();
@@ -156,8 +156,8 @@ function eventsView(){
   <button class="del" onclick="delItem('${i.id}')">O'chirish</button>`;
 }
 function quizView(){
-  const h=`<h2 class="ttl">Test</h2>`;
-  if(!db.items.length)return h+`<p class="mut">Test uchun avval kamida bitta yozuv qo'shing.</p>`;
+  const h=`<h2 class="ttl">Test${qmode?": "+({article:"maqolalar",year:"yillar",date:"sanalar"})[qmode]+" bo'yicha":""}</h2>`;
+  if(!qmode)return h+`<p class="mut">Chap paneldan tanlang: maqolalar, yillar yoki sanalar bo'yicha test.</p>`;if(!qpool().length)return h+`<p class="mut">Bu bo'limda hali yozuv yo'q. Avval pastdagi maydondan qo'shing.</p>`;
   if(!qz)return h+`<p class="mut">Saqlangan yozuvlaringizdan tasodifiy savol beriladi.</p><button class="go" onclick="nextQ()">Testni boshlash</button>`;
   if(qz.loading)return h+`<p class="mut">Savol tayyorlanmoqda…</p>`;
   if(qz.error)return h+`<p class="err">Xato: ${esc(qz.error)}</p><button class="go" onclick="nextQ()">Qayta urinish</button>`;
@@ -166,11 +166,13 @@ function quizView(){
    (done?`<p>${esc(qz.explain||"")}</p><button class="go" onclick="nextQ()">Keyingi savol</button>`:"");
 }
 function pick(k){qz.picked=k;render()}
+const qpool=()=>db.items.filter(i=>i.type===qmode);
+function setQ(m){tab="quiz";qmode=m;qz=null;closeSb();nextQ()}
 async function nextQ(){
-  const it=db.items[Math.random()*db.items.length|0];
+  const pl=qpool();if(!pl.length){render();return}const it=pl[Math.random()*pl.length|0];
   qz={loading:true};render();
   try{
-    const r=await api("quiz",{text:`${it.title}. ${it.body||""} ${(it.events||[]).slice(0,10).join(" ")}`});
+    const r=await api("quiz",{text:`${it.title}. ${it.body||""} ${(it.events||[]).join(" ")}`});
     if(!Array.isArray(r.options)||r.options.length<2||typeof r.answer!=="number")throw new Error("AI noto'g'ri formatda javob berdi, qayta urinib ko'ring");
     qz=r;
   }catch(e){qz={error:e.message}}
