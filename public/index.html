@@ -77,7 +77,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let db={items:[],cats:[]},tab="art",cat="all",cur=null,busy=false,qz=null,catsOpen=true,qmode=null;
+let db={items:[],cats:[]},tab="art",cat="all",cur=null,busy=false,qz=null,catsOpen=true,qmode=null,me=0,names={};
 
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",6000)}
 function closeSb(){document.body.classList.remove("sb")}
@@ -99,7 +99,7 @@ async function gen(){
   busy=true;$("#gbtn").textContent="Tayyorlanmoqda…";$("#gbtn").disabled=true;
   try{
     const it=await api("generate",{term,type,cats:db.cats});
-    it.id=Date.now().toString(36);it.type=type;
+    it.id=Date.now().toString(36);it.type=type;it.by=me;
     if(it.image_query&&it.image_query!=="null")it.img=await wikiImg(it.image_query);
     db.items.unshift(it);await persist();$("#term").value="";
     tab=type==="article"?"art":type;cat="all";cur=it.id;closeSb();
@@ -114,8 +114,8 @@ function go(t){
 function setCat(c){tab="art";cat=c;cur=null;closeSb();render()}
 function openItem(id){cur=id;render()}
 function addCat(){const n=prompt("Yangi toifa nomi");if(n&&n.trim()&&!db.cats.includes(n.trim())){db.cats.push(n.trim());persist();render()}}
-function chCat(id,c){db.items.find(x=>x.id===id).cat=c;persist()}
-function delItem(id){if(confirm("O'chirilsinmi?")){db.items=db.items.filter(x=>x.id!==id);cur=null;persist();render()}}
+function chCat(id,c){const it=db.items.find(x=>x.id===id);if(it.by!==me){toast("Bu boshqa foydalanuvchining maqolasi, uni o'zgartirib bo'lmaydi");render();return}it.cat=c;persist()}
+function delItem(id){const it=db.items.find(x=>x.id===id);if(it&&it.by!==me){toast("Bu boshqa foydalanuvchining yozuvi, uni o'chirib bo'lmaydi");return}if(confirm("O'chirilsinmi?")){db.items=db.items.filter(x=>x.id!==id);cur=null;persist();render()}}
 
 function render(){$("#nav").innerHTML=navHtml();const v=$("#view");v.innerHTML='<div class="col">'+viewHtml()+'</div>';v.scrollTop=0}
 function navHtml(){
@@ -132,7 +132,7 @@ function viewHtml(){
 }
 function list(){
   const shown=db.items.filter(i=>i.type==="article"&&(cat==="all"||i.cat===cat));
-  return `<h2 class="ttl">${cat==="all"?"Barcha maqolalar":esc(cat)}</h2>`+(shown.map(i=>`<button class="row" onclick="openItem('${i.id}')"><b>${esc(i.title)}</b><small>${esc(i.cat)}</small></button>`).join("")||`<p class="mut">Bu yerda hali maqola yo'q. Pastdagi maydonga atama yozing.</p>`);
+  return `<h2 class="ttl">${cat==="all"?"Barcha maqolalar":esc(cat)}</h2>`+(shown.map(i=>`<button class="row" onclick="openItem('${i.id}')"><b>${esc(i.title)}</b><small>${esc(i.cat)} · ${esc(names[i.by]||"")}</small></button>`).join("")||`<p class="mut">Bu yerda hali maqola yo'q. Pastdagi maydonga atama yozing.</p>`);
 }
 function srcs(i){return i.sources?.length?`<div class="src"><b>Manbalar</b><ul>${i.sources.map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title||s.url)}</a></li>`).join("")}</ul><small class="mut">Muhim yil va sonlarni o'zingiz tekshirib oling.</small></div>`:""}
 function reader(){
@@ -147,7 +147,7 @@ function reader(){
 function timeline(){
   const arr=db.items.filter(i=>i.type===tab).sort((a,b)=>(a.sort||0)-(b.sort||0));
   const name=tab==="year"?"Yillar":"Sanalar";
-  return `<h2 class="ttl">${name}</h2>`+(arr.map(i=>`<button class="row" onclick="openItem('${i.id}')"><b>${esc(i.title)}</b><small>${(i.events||[]).length} ta voqea</small></button>`).join("")||`<p class="mut">Hali qo'shilmagan. Pastdagi maydonda turini "${tab==="year"?"Yil":"Sana"}" qilib tanlang va ${tab==="year"?"1969":"20-iyul"} deb yozing.</p>`);
+  return `<h2 class="ttl">${name}</h2>`+(arr.map(i=>`<button class="row" onclick="openItem('${i.id}')"><b>${esc(i.title)}</b><small>${(i.events||[]).length} ta voqea · ${esc(names[i.by]||"")}</small></button>`).join("")||`<p class="mut">Hali qo'shilmagan. Pastdagi maydonda turini "${tab==="year"?"Yil":"Sana"}" qilib tanlang va ${tab==="year"?"1969":"20-iyul"} deb yozing.</p>`);
 }
 function eventsView(){
   const i=db.items.find(x=>x.id===cur);if(!i)return timeline();
@@ -178,5 +178,5 @@ async function nextQ(){
   }catch(e){qz={error:e.message}}
   render();
 }
-(async()=>{try{db=await api("load")}catch(e){toast(e.message)}render()})();
+(async()=>{try{const d=await api("load");db={items:d.items,cats:d.cats};me=d.me;names=d.names||{}}catch(e){toast(e.message)}render()})();
 </script></body></html>
