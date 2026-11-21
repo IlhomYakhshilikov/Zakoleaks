@@ -30,7 +30,7 @@ async function wiki(term) {
 
 const SYS = `Sen "Zakovat" intellektual o'yini uchun ma'lumotnoma muharririsan. Faqat o'zbek tilida (lotin yozuvi) yoz. Berilgan Wikipedia matniga tayan va undan tashqari faqat aniq bilgan faktlaringni qo'sh. Yil, sana va sonlarni o'ylab topma; ishonching komil bo'lmasa, yozma. Javob faqat bitta JSON obyekt bo'lsin.`;
 
-export async function onRequestPost({ request, env }) {
+async function handle({ request, env }) {
   if (env.ACCESS_KEY && request.headers.get("x-key") !== env.ACCESS_KEY) return J({ error: "Kirish kaliti noto'g'ri" }, 401);
   const b = await request.json();
   try {
@@ -84,3 +84,10 @@ export async function onRequestPost({ request, env }) {
     return J({ error: "Noma'lum amal" }, 400);
   } catch (e) { return J({ error: e.message }, 500); }
 }
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api" && request.method === "POST") return handle({ request, env });
+    return env.ASSETS.fetch(request);
+  }
+};
